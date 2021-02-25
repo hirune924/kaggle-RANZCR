@@ -31,6 +31,7 @@ conf_dict = {'batch_size': 32,
              'epoch': 10,
              'image_size': 512,
              'model_name': 'tf_efficientnet_b0',
+             'lr': 0.001,
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
              'output_dir': './'}
 conf_base = OmegaConf.create(conf_dict)
@@ -147,7 +148,7 @@ class LitSystem(pl.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
         
