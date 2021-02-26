@@ -85,7 +85,8 @@ class RANZCRDataset(Dataset):
             #label = self.data[self.data["StudyInstanceUID"] == img_name].values.tolist()[0][1:-1]
             #label = self.data.iloc[idx][self.target_cols].values
             label = self.data.iloc[idx][self.target].values
-            label = torch.tensor(label, dtype=torch.float32)
+            #label = torch.tensor(label, dtype=torch.float32)
+            label = torch.from_numpy(label.astype(np.float32))
 
             return image, label
         else:
