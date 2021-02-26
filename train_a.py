@@ -154,7 +154,7 @@ class LitSystem(pl.LightningModule):
         super().__init__()
         #self.conf = conf
         self.save_hyperparameters(conf)
-        self.model = timm.create_model(model_name=self.hparams.model_name, num_classes=11, pretrained=True, in_chans=3)
+        self.model = timm.create_model(model_name=self.hparams.model_name, num_classes=4, pretrained=True, in_chans=3)
         self.criteria = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, x):
@@ -164,7 +164,7 @@ class LitSystem(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.hparams.epoch)
         
         return [optimizer], [scheduler]
 
