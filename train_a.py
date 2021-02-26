@@ -76,7 +76,7 @@ class RANZCRDataset(Dataset):
             #label = self.data[self.data["StudyInstanceUID"] == img_name].values.tolist()[0][1:-1]
             #label = self.data.iloc[idx][self.target_cols].values
             #label = torch.tensor(label,dtype= torch.float32) 
-            label = torch.Tensor([self.data.iloc[idx][self.ETT].values.max(),
+            label = torch.tensor([self.data.iloc[idx][self.ETT].values.max(),
                                   self.data.iloc[idx][self.NGT].values.max(),
                                   self.data.iloc[idx][self.CVC].values.max(),
                                   self.data.iloc[idx][self.SGC].values.max()],
