@@ -124,8 +124,11 @@ class RANZCRDataModule(pl.LightningDataModule):
                 tgt = CVC
              
             df_target = df[df[tgt].sum(axis=1)>0]
-            df_ex = df[df[tgt].sum(axis=1)==0].sample(n=len(df_target))
-            df = df_target.append(df_ex)
+            if self.conf.target == 'CVC':
+                df = df_target
+            else: 
+                df_ex = df[df[tgt].sum(axis=1)==0].sample(n=len(df_target))
+                df = df_target.append(df_ex)
             
             train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
