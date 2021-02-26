@@ -34,7 +34,7 @@ conf_dict = {'batch_size': 32,
              'lr': 0.001,
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
              'output_dir': './',
-             'target_cls': 'ETT'}
+             'target': 'ETT'}
 conf_base = OmegaConf.create(conf_dict)
 
 
@@ -110,6 +110,21 @@ class RANZCRDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         if stage == 'fit':
             df = pd.read_csv(os.path.join(self.conf.data_dir, "train.csv"))
+         
+            ETT = ['ETT - Abnormal', 'ETT - Borderline', 'ETT - Normal']
+            NGT = ['NGT - Abnormal', 'NGT - Borderline', 'NGT - Incompletely Imaged', 'NGT - Normal']
+            CVC = ['CVC - Abnormal', 'CVC - Borderline', 'CVC - Normal']
+            SGC = ['Swan Ganz Catheter Present']
+            if conf.target == 'ETT':
+                tgt = ETT
+            elif conf.target == 'NGT':
+                tgt = NGT
+            elif conf.target == 'CVC':
+                tgt = CVC
+             
+            df_target = df[df[tgt].sum(axis=1)>0]
+            df_ex = df[df[tgt].sum(axis=1)==0].sample(n=len(df_target))
+            df = df_target.append(df_ex)
             
             train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
@@ -131,8 +146,8 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
 
-            self.train_dataset = RANZCRDataset(train_df, os.path.join(self.conf.data_dir, 'train'), transform=train_transform)
-            self.valid_dataset = RANZCRDataset(valid_df, os.path.join(self.conf.data_dir, 'train'), transform=valid_transform)
+            self.train_dataset = RANZCRDataset(train_df, os.path.join(self.conf.data_dir, 'train'), target=self.conf.target, transform=train_transform)
+            self.valid_dataset = RANZCRDataset(valid_df, os.path.join(self.conf.data_dir, 'train'), target=self.conf.target, transform=valid_transform)
             
         elif stage == 'test':
             test_df = pd.read_csv(os.path.join(self.conf.data_dir, "sample_submission.csv"))
@@ -140,7 +155,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=1, always_apply=False, p=1.0),
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
-            self.test_dataset = RANZCRDataset(test_df, os.path.join(self.conf.data_dir, 'test'), transform=test_transform, train=False)
+            self.test_dataset = RANZCRDataset(test_df, os.path.join(self.conf.data_dir, 'test'), target=self.conf.target, transform=test_transform, train=False)
          
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.conf.batch_size, num_workers=4, shuffle=True, pin_memory=True, drop_last=True)
@@ -226,7 +241,7 @@ def main():
     lr_monitor = LearningRateMonitor(logging_interval='step')
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(conf.output_dir, 'ckpt/'), monitor='avg_val_loss', 
                                           save_last=True, save_top_k=5, mode='min', 
-                                          save_weights_only=True, filename='{epoch}-{avg_val_loss:.2f}')
+                                          save_weights_only=True, filename=conf.target + '-' + '{epoch}-{avg_val_loss:.2f}')
 
     data_module = RANZCRDataModule(conf)
 
