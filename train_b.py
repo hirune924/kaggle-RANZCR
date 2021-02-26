@@ -115,11 +115,11 @@ class RANZCRDataModule(pl.LightningDataModule):
             NGT = ['NGT - Abnormal', 'NGT - Borderline', 'NGT - Incompletely Imaged', 'NGT - Normal']
             CVC = ['CVC - Abnormal', 'CVC - Borderline', 'CVC - Normal']
             SGC = ['Swan Ganz Catheter Present']
-            if conf.target == 'ETT':
+            if self.conf.target == 'ETT':
                 tgt = ETT
-            elif conf.target == 'NGT':
+            elif self.conf.target == 'NGT':
                 tgt = NGT
-            elif conf.target == 'CVC':
+            elif self.conf.target == 'CVC':
                 tgt = CVC
              
             df_target = df[df[tgt].sum(axis=1)>0]
