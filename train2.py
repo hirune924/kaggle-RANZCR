@@ -36,6 +36,8 @@ def get_score(y_true, y_pred):
     avg_score = np.mean(scores)
     return avg_score, scores
 
+import random
+import gc
 def multi_label_stratified_group_k_fold(label_arr: np.array, gid_arr: np.array, n_fold: int, seed: int=42):
     """
     create multi-label stratified group kfold indexs.
