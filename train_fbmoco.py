@@ -206,7 +206,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         ], p=0.2),
                         A.IAAPiecewiseAffine(p=0.2),
                         A.IAASharpen(p=0.2),
-                        A.Cutout(max_h_size=int(size * 0.1), max_w_size=int(size * 0.1), num_holes=5, p=0.5),
+                        A.Cutout(max_h_size=int(self.conf.image_size * 0.1), max_w_size=int(self.conf.image_size * 0.1), num_holes=5, p=0.5),
                         A.Normalize()
                         ])
 
