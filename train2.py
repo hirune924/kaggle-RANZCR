@@ -36,6 +36,81 @@ def get_score(y_true, y_pred):
     avg_score = np.mean(scores)
     return avg_score, scores
 
+def multi_label_stratified_group_k_fold(label_arr: np.array, gid_arr: np.array, n_fold: int, seed: int=42):
+    """
+    create multi-label stratified group kfold indexs.
+
+    reference: https://www.kaggle.com/jakubwasikowski/stratified-group-k-fold-cross-validation
+    input:
+        label_arr: numpy.ndarray, shape = (n_train, n_class)
+            multi-label for each sample's index using multi-hot vectors
+        gid_arr: numpy.array, shape = (n_train,)
+            group id for each sample's index
+        n_fold: int. number of fold.
+        seed: random seed.
+    output:
+        yield indexs array list for each fold's train and validation.
+    """
+    np.random.seed(seed)
+    random.seed(seed)
+    start_time = time.time()
+    n_train, n_class = label_arr.shape
+    gid_unique = sorted(set(gid_arr))
+    n_group = len(gid_unique)
+
+    # # aid_arr: (n_train,), indicates alternative id for group id.
+    # # generally, group ids are not 0-index and continuous or not integer.
+    gid2aid = dict(zip(gid_unique, range(n_group)))
+#     aid2gid = dict(zip(range(n_group), gid_unique))
+    aid_arr = np.vectorize(lambda x: gid2aid[x])(gid_arr)
+
+    # # count labels by class
+    cnts_by_class = label_arr.sum(axis=0)  # (n_class, )
+
+    # # count labels by group id.
+    col, row = np.array(sorted(enumerate(aid_arr), key=lambda x: x[1])).T
+    cnts_by_group = coo_matrix(
+        (np.ones(len(label_arr)), (row, col))
+    ).dot(coo_matrix(label_arr)).toarray().astype(int)
+    del col
+    del row
+    cnts_by_fold = np.zeros((n_fold, n_class), int)
+
+    groups_by_fold = [[] for fid in range(n_fold)]
+    group_and_cnts = list(enumerate(cnts_by_group))  # pair of aid and cnt by group
+    np.random.shuffle(group_and_cnts)
+    print("finished preparation", time.time() - start_time)
+    for aid, cnt_by_g in sorted(group_and_cnts, key=lambda x: -np.std(x[1])):
+        best_fold = None
+        min_eval = None
+        for fid in range(n_fold):
+            # # eval assignment.
+            cnts_by_fold[fid] += cnt_by_g
+            fold_eval = (cnts_by_fold / cnts_by_class).std(axis=0).mean()
+            cnts_by_fold[fid] -= cnt_by_g
+
+            if min_eval is None or fold_eval < min_eval:
+                min_eval = fold_eval
+                best_fold = fid
+
+        cnts_by_fold[best_fold] += cnt_by_g
+        groups_by_fold[best_fold].append(aid)
+    print("finished assignment.", time.time() - start_time)
+
+    gc.collect()
+    idx_arr = np.arange(n_train)
+    for fid in range(n_fold):
+        val_groups = groups_by_fold[fid]
+
+        val_indexs_bool = np.isin(aid_arr, val_groups)
+        train_indexs = idx_arr[~val_indexs_bool]
+        val_indexs = idx_arr[val_indexs_bool]
+
+        print("[fold {}]".format(fid), end=" ")
+        print("n_group: (train, val) = ({}, {})".format(n_group - len(val_groups), len(val_groups)), end=" ")
+        print("n_sample: (train, val) = ({}, {})".format(len(train_indexs), len(val_indexs)))
+
+        yield train_indexs, val_indexs
 
 ####################
 # Config
@@ -46,6 +121,7 @@ conf_dict = {'batch_size': 32,
              'image_size': 640,
              'model_name': 'tf_efficientnet_b0',
              'lr': 0.001,
+             'fold': 0,
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
              'output_dir': './'}
 conf_base = OmegaConf.create(conf_dict)
@@ -100,7 +176,10 @@ class RANZCRDataModule(pl.LightningDataModule):
     def __init__(self, conf):
         super().__init__()
         self.conf = conf
-        
+        self.target_cols=['ETT - Abnormal', 'ETT - Borderline', 'ETT - Normal',
+                         'NGT - Abnormal', 'NGT - Borderline', 'NGT - Incompletely Imaged', 'NGT - Normal', 
+                         'CVC - Abnormal', 'CVC - Borderline', 'CVC - Normal',
+                         'Swan Ganz Catheter Present']       
 
     # OPTIONAL, called only on 1 GPU/machine(for download or tokenize)
     def prepare_data(self):
@@ -111,7 +190,17 @@ class RANZCRDataModule(pl.LightningDataModule):
         if stage == 'fit':
             df = pd.read_csv(os.path.join(self.conf.data_dir, "train.csv"))
             
-            train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
+            label_arr = df[self.target_cols].values
+            group_id = df['PatientID'].values
+            train_val_indexs = list(multi_label_stratified_group_k_fold(label_arr, group_id, 5, 2021))
+            train["fold"] = -1
+            for fold_id, (trn_idx, val_idx) in enumerate(train_val_indexs):
+                df.loc[val_idx, "fold"] = fold_id
+                
+            train_df = df[df['fold'] == self.conf.fold]
+            valid_df = df[df['fold'] != self.conf.fold]
+    
+            #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
             train_transform = A.Compose([
                         A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), p=1), 
