@@ -22,9 +22,21 @@ from sklearn import model_selection
 import albumentations as A
 import timm
 from omegaconf import OmegaConf
+
+from sklearn.metrics import roc_auc_score
 ####################
 # Utils
 ####################
+
+def get_score(y_true, y_pred):
+    scores = []
+    for i in range(y_true.shape[1]):
+        score = roc_auc_score(y_true[:,i], y_pred[:,i])
+        scores.append(score)
+    avg_score = np.mean(scores)
+    return avg_score, scores
+
+
 from pathlib import Path
 import torch
 import torchvision.models as models
@@ -98,8 +110,8 @@ def get_model(model_name='mimic-chexpert_lr_1.0_bs_128_fd_128_qs_65536.pt',
 ####################
 
 conf_dict = {'batch_size': 32, 
-             'epoch': 15,
-             'image_size': 512,
+             'epoch': 30,
+             'image_size': 640,
              'model_name': 'mimic-chexpert_lr_1.0_bs_128_fd_128_qs_65536.pt',
              'lr': 0.0001,
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
@@ -199,7 +211,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         ])
 
             valid_transform = A.Compose([
-                        A.Resize(height=512, width=512, interpolation=1, always_apply=False, p=1.0),
+                        A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=1, always_apply=False, p=1.0),
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
 
@@ -242,7 +254,7 @@ class LitSystem(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.hparams.epoch)
         
         return [optimizer], [scheduler]
 
@@ -268,14 +280,15 @@ class LitSystem(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         y = torch.cat([x["y"] for x in outputs]).cpu()
-        #y_hat = torch.sigmoid(torch.cat([x["y_hat"] for x in outputs])).cpu()
+        y_hat = torch.sigmoid(torch.cat([x["y_hat"] for x in outputs])).cpu()
 
         #preds = np.argmax(y_hat, axis=1)
 
-        #val_accuracy, _ = get_score(y, y_hat)
+        val_score, _ = get_score(y, y_hat)
 
         self.log('avg_val_loss', avg_val_loss)
-        #self.log('val_acc', val_accuracy)
+        self.log('val_score', val_score)
+        
         
 ####################
 # Train
@@ -290,9 +303,9 @@ def main():
     csv_logger = loggers.CSVLogger(save_dir=os.path.join(conf.output_dir, 'csv_log/'))
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(conf.output_dir, 'ckpt/'), monitor='avg_val_loss', 
-                                          save_last=True, save_top_k=5, mode='min', 
-                                          save_weights_only=True, filename='{epoch}-{avg_val_loss:.2f}')
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(conf.output_dir, 'ckpt/'), monitor='val_score', 
+                                          save_last=True, save_top_k=5, mode='max', 
+                                          save_weights_only=True, filename='{epoch}-{val_score:.2f}')
 
     data_module = RANZCRDataModule(conf)
 
@@ -305,7 +318,9 @@ def main():
         gpus=-1,
         amp_backend='native',
         amp_level='O2',
-        precision=16
+        precision=16,
+        num_sanity_val_steps=0,
+        val_check_interval=1.0
             )
 
     trainer.fit(lit_model, data_module)
