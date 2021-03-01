@@ -197,7 +197,7 @@ class RANZCRDataModule(pl.LightningDataModule):
             label_arr = df[self.target_cols].values
             group_id = df['PatientID'].values
             train_val_indexs = list(multi_label_stratified_group_k_fold(label_arr, group_id, 5, 2021))
-            train["fold"] = -1
+            df["fold"] = -1
             for fold_id, (trn_idx, val_idx) in enumerate(train_val_indexs):
                 df.loc[val_idx, "fold"] = fold_id
                 
