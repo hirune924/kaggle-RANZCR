@@ -199,7 +199,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                             A.MotionBlur(),
                             A.MedianBlur(),
                         ], p=0.20),
-                        A.Resize(size, size),
+                        #A.Resize(size, size),
                         A.OneOf([
                             A.JpegCompression(quality_lower=95, quality_upper=100, p=0.50),
                             A.Downscale(scale_min=0.75, scale_max=0.95),
