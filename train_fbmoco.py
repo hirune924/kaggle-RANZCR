@@ -114,6 +114,7 @@ conf_dict = {'batch_size': 32,
              'image_size': 640,
              'model_name': 'mimic-chexpert_lr_1.0_bs_128_fd_128_qs_65536.pt',
              'lr': 0.0001,
+             'mode': 'normal', # 'finetune'
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
              'output_dir': './'}
 conf_base = OmegaConf.create(conf_dict)
@@ -252,7 +253,16 @@ class LitSystem(pl.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
+        if self.hparams.mode  == 'normal':
+            model = self.model
+        elif self.hparams.mode  == 'finetune':
+            if hasattr(self.model, "classifier"):
+                model = self.model.classifier
+            elif hasattr(self.model, "fc"):
+                model = self.model.fc
+            else:
+                raise RuntimeError("Unrecognized classifier.")
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.hparams.lr)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.hparams.epoch)
         
