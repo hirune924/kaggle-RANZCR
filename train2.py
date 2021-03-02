@@ -201,8 +201,8 @@ class RANZCRDataModule(pl.LightningDataModule):
             for fold_id, (trn_idx, val_idx) in enumerate(train_val_indexs):
                 df.loc[val_idx, "fold"] = fold_id
                 
-            train_df = df[df['fold'] == self.conf.fold]
-            valid_df = df[df['fold'] != self.conf.fold]
+            train_df = df[df['fold'] != self.conf.fold]
+            valid_df = df[df['fold'] == self.conf.fold]
     
             #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
