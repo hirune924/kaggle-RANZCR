@@ -207,7 +207,7 @@ class RANZCRDataModule(pl.LightningDataModule):
             #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
             train_transform = A.Compose([
-                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), p=1), 
+                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.75, 1), p=1), 
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
