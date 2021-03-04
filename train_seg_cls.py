@@ -325,7 +325,7 @@ class LitSystem(pl.LightningModule):
         self.save_hyperparameters(conf)
         #self.model = timm.create_model(model_name=self.hparams.model_name, num_classes=11, pretrained=True, in_chans=3)
         self.model = SegNet(model_name=self.hparams.model_name, out_dim=11, pretrained=False)
-        self.criteria = torch.nn.BCEWithLogitsLoss()
+        self.criteria = torch.nn.BCEWithLogitsLoss(reduction='none')
 
     def forward(self, x):
         # use forward for inference/predictions
@@ -342,8 +342,8 @@ class LitSystem(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         _, x, mask, y, no_anno = batch
         y_hat_mask, y_hat = self.model(x)
-        cls_loss = self.criteria(y_hat, y)
-        seg_loss = self.criteria(y_hat_mask * no_anno, mask)
+        cls_loss = self.criteria(y_hat, y).mean()
+        seg_loss = (self.criteria(y_hat_mask, mask).mean(axis = -1).mean(axis = -1) * no_anno).mean()
         
         self.log('train_seg_loss', seg_loss, on_epoch=True)
         self.log('train_cls_loss', cls_loss, on_epoch=True)
@@ -352,8 +352,8 @@ class LitSystem(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         _, x, mask, y, no_anno = batch
         y_hat_mask, y_hat = self.model(x)
-        cls_loss = self.criteria(y_hat, y)
-        seg_loss = self.criteria(y_hat_mask * no_anno, mask)
+        cls_loss = self.criteria(y_hat, y).mean()
+        seg_loss = (self.criteria(y_hat_mask, mask).mean(axis = -1).mean(axis = -1) * no_anno).mean()
         
         return {
             "val_seg_loss": seg_loss,
