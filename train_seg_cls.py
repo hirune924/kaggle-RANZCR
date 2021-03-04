@@ -340,20 +340,20 @@ class LitSystem(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
-        _, x, mask, y, _ = batch
+        _, x, mask, y, no_anno = batch
         y_hat_mask, y_hat = self.model(x)
         cls_loss = self.criteria(y_hat, y)
-        seg_loss = self.criteria(y_hat_mask, mask)
+        seg_loss = self.criteria(y_hat_mask * no_anno, mask)
         
         self.log('train_seg_loss', seg_loss, on_epoch=True)
         self.log('train_cls_loss', cls_loss, on_epoch=True)
         return cls_loss + seg_loss
 
     def validation_step(self, batch, batch_idx):
-        _, x, mask, y, _ = batch
+        _, x, mask, y, no_anno = batch
         y_hat_mask, y_hat = self.model(x)
         cls_loss = self.criteria(y_hat, y)
-        seg_loss = self.criteria(y_hat_mask, mask)
+        seg_loss = self.criteria(y_hat_mask * no_anno, mask)
         
         return {
             "val_seg_loss": seg_loss,
