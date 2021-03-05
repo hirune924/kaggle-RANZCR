@@ -25,6 +25,8 @@ from omegaconf import OmegaConf
 
 from sklearn.metrics import roc_auc_score
 import torch.nn.functional as F
+import glob
+
 ####################
 # Utils
 ####################
@@ -318,12 +320,12 @@ class LitSystem(pl.LightningModule):
         
         y_hat = self.model(x)
         sup_loss = self.criteria(y_hat, y)
-        
-        pred_w_x = self.model(w_x).sigmoid()
+        with torch.no_grad():
+            pred_w_x = self.model(w_x).sigmoid().detach
         pred_s_x = self.model(s_x).sigmoid()
         
         #unsup_loss = F.kl_div(pred_w_x.log(), pred_s_x, None, None, 'mean')
-        unsup_loss = self.criteria(pred_w_x, pred_s_x)
+        unsup_loss = self.criteria(pred_s_x, pred_w_x)
         
         
         self.log('train_sup_loss', sup_loss, on_epoch=True)
