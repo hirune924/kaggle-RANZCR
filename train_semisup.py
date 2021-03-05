@@ -321,7 +321,7 @@ class LitSystem(pl.LightningModule):
         y_hat = self.model(x)
         sup_loss = self.criteria(y_hat, y)
         with torch.no_grad():
-            pred_w_x = self.model(w_x).sigmoid().detach
+            pred_w_x = self.model(w_x).sigmoid().detach()
         pred_s_x = self.model(s_x).sigmoid()
         
         #unsup_loss = F.kl_div(pred_w_x.log(), pred_s_x, None, None, 'mean')
