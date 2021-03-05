@@ -324,8 +324,8 @@ class LitSystem(pl.LightningModule):
             pred_w_x = self.model(w_x).sigmoid().detach()
         pred_s_x = self.model(s_x).sigmoid()
         
-        #unsup_loss = F.kl_div(pred_w_x.log(), pred_s_x, None, None, 'mean')
-        unsup_loss = self.criteria(pred_s_x, pred_w_x)
+        unsup_loss = F.kl_div(pred_w_x.log(), pred_s_x)
+        #unsup_loss = self.criteria(pred_s_x, pred_w_x)
         
         
         self.log('train_sup_loss', sup_loss, on_epoch=True)
