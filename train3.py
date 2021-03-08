@@ -126,7 +126,8 @@ conf_dict = {'batch_size': 32,
              'lr': 0.001,
              'fold': 0,
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
-             'output_dir': './'}
+             'output_dir': './',
+             'trainer': {}}
 conf_base = OmegaConf.create(conf_dict)
 
 
@@ -161,9 +162,7 @@ class RANZCRDataset(Dataset):
             image = self.transform(image=img)
             image = torch.from_numpy(image["image"].transpose(2, 0, 1))
 
-        if self.train:
-            #label = self.data[self.data["StudyInstanceUID"] == img_name].values.tolist()[0][1:-1]
-            #label = torch.tensor(label,dtype= torch.float32) 
+        if self.train: 
             label = self.data.iloc[idx][self.target_cols].values
             label = torch.from_numpy(label.astype(np.float32))
             return image, label
@@ -206,7 +205,7 @@ class RANZCRDataModule(pl.LightningDataModule):
             #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
             train_transform = A.Compose([
-                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.75, 1), p=1), 
+                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), p=1), 
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
@@ -285,6 +284,15 @@ class LitSystem(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
+        
+        # mixup
+        alpha = 1.0
+        lam = np.random.beta(alpha, alpha)
+        batch_size = x.size()[0]
+        index = torch.randperm(batch_size)
+        x = lam * x + (1 - lam) * x[index, :]
+        y = lam * y +  (1 - lam) * y[index]
+        
         y_hat = self.model(x)
         loss = self.criteria(y_hat, y)
         
@@ -330,7 +338,7 @@ def main():
     lr_monitor = LearningRateMonitor(logging_interval='step')
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(conf.output_dir, 'ckpt/'), monitor='val_score', 
                                           save_last=True, save_top_k=5, mode='max', 
-                                          save_weights_only=True, filename='{epoch}-{val_score:.2f}')
+                                          save_weights_only=True, filename='{epoch}-{val_score:.5f}')
 
     data_module = RANZCRDataModule(conf)
 
@@ -345,7 +353,8 @@ def main():
         amp_level='O2',
         precision=16,
         num_sanity_val_steps=0,
-        val_check_interval=1.0
+        val_check_interval=1.0,
+        **conf.trainer
             )
 
     trainer.fit(lit_model, data_module)
