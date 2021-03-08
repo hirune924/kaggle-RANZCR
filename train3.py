@@ -205,7 +205,7 @@ class RANZCRDataModule(pl.LightningDataModule):
             #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
             train_transform = A.Compose([
-                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), p=1), 
+                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), interpolation=cv2.INTER_AREA, p=1), 
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
@@ -234,7 +234,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         ])
 
             valid_transform = A.Compose([
-                        A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=1, always_apply=False, p=1.0),
+                        A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=cv2.INTER_AREA, always_apply=False, p=1.0),
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
 
@@ -244,7 +244,7 @@ class RANZCRDataModule(pl.LightningDataModule):
         elif stage == 'test':
             test_df = pd.read_csv(os.path.join(self.conf.data_dir, "sample_submission.csv"))
             test_transform = A.Compose([
-                        A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=1, always_apply=False, p=1.0),
+                        A.Resize(height=self.conf.image_size, width=self.conf.image_size, interpolation=cv2.INTER_AREA, always_apply=False, p=1.0),
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
             self.test_dataset = RANZCRDataset(test_df, os.path.join(self.conf.data_dir, 'test'), transform=test_transform, train=False)
