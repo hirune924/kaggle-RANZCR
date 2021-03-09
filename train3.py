@@ -205,11 +205,11 @@ class RANZCRDataModule(pl.LightningDataModule):
             #train_df, valid_df = model_selection.train_test_split(df, test_size=0.2, random_state=42)
 
             train_transform = A.Compose([
-                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.9, 1), p=1), 
+                        A.RandomResizedCrop(height=self.conf.image_size, width=self.conf.image_size, scale=(0.8, 1), p=1), 
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
-                        A.RandomBrightnessContrast(brightness_limit=(-0.2,0.2), contrast_limit=(-0.2, 0.2), p=0.7),
+                        A.RandomBrightnessContrast(brightness_limit=(-0.4,0.4), contrast_limit=(-0.4, 0.4), p=0.8),
                         A.CLAHE(clip_limit=(1,4), p=0.5),
                         A.OneOf([
                             A.OpticalDistortion(distort_limit=1.0),
@@ -230,7 +230,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.IAAPiecewiseAffine(p=0.2),
                         A.IAASharpen(p=0.2),
                         A.Cutout(max_h_size=int(self.conf.image_size * 0.1), max_w_size=int(self.conf.image_size * 0.1), num_holes=5, p=0.5),
-                        A.Normalize()
+                        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
 
             valid_transform = A.Compose([
