@@ -345,12 +345,14 @@ class LitSystem(pl.LightningModule):
         batch_size = x.size()[0]
         index = torch.randperm(batch_size)
         x = lam * x + (1 - lam) * x[index, :]
+        x_org = lam * x_org + (1 - lam) * x_org[index, :]
         y = lam * y +  (1 - lam) * y[index]
         
         y_hat = self.model(x_org)
         c_loss = self.criteria(y_hat, y)
         
         with torch.no_grad():
+            self.teacher_model.eval()
             t_hat = torch.sigmoid(self.teacher_model(x)).detach()
         t_loss = self.consistency_loss(t_hat, torch.sigmoid(y_hat))
         
