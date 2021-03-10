@@ -115,6 +115,14 @@ def multi_label_stratified_group_k_fold(label_arr: np.array, gid_arr: np.array, 
 
         yield train_indexs, val_indexs
 
+        
+from scipy import interpolate
+def interpolate_mask(data):
+    f = interpolate.interp1d(data[:, 0], data[:, 1])
+    xnew = np.arange(data[:, 0].min(), data[:, 0].max(), 1)
+    fnew = f(xnew)
+    return np.concatenate([xnew[:, None], fnew[:, None]], axis = -1).astype(int)
+
 ####################
 # Config
 ####################
@@ -134,41 +142,59 @@ conf_base = OmegaConf.create(conf_dict)
 ####################
 # Dataset
 ####################
-
+import ast
 class RANZCRDataset(Dataset):
-    def __init__(self, dataframe, data_dir, transform=None, train=True):
-        self.data = dataframe.reset_index(drop=True)
-        self.data_dir = data_dir
+    def __init__(self, df, df_annotations, annot_size=10, transform=None, mode = 'train'):
+        target_cols=['ETT - Abnormal', 'ETT - Borderline', 'ETT - Normal',
+                         'NGT - Abnormal', 'NGT - Borderline', 'NGT - Incompletely Imaged', 'NGT - Normal', 
+                         'CVC - Abnormal', 'CVC - Borderline', 'CVC - Normal',
+                         'Swan Ganz Catheter Present']    
+        self.df = df
+        self.df_annotations = df_annotations
+        self.annot_size = annot_size
+        self.file_names = df['file_path'].values
+        self.patient_id = df['StudyInstanceUID'].values
+        self.labels = df[target_cols].values
         self.transform = transform
-        self.train = train
-        self.target_cols=['ETT - Abnormal', 'ETT - Borderline', 'ETT - Normal',
-                          'NGT - Abnormal', 'NGT - Borderline', 'NGT - Incompletely Imaged', 'NGT - Normal', 
-                          'CVC - Abnormal', 'CVC - Borderline', 'CVC - Normal',
-                          'Swan Ganz Catheter Present']
+        self.mode = mode
         cv2.setNumThreads(0)
 
     def __len__(self):
-        return len(self.data)
+        return len(self.df)
 
     def __getitem__(self, idx):
-        img_name = self.data.loc[idx, "StudyInstanceUID"]
-        img_path = os.path.join(self.data_dir, img_name + "." + "jpg")
+        file_name = self.file_names[idx]
+        patient_id = self.patient_id[idx]
+        no_anno = 1
+        image = cv2.imread(file_name)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        #img =  np.asarray(Image.open(img_path).convert("RGB"))
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        if self.transform is not None:
-            image = self.transform(image=img)
-            image = torch.from_numpy(image["image"].transpose(2, 0, 1))
+        query_string = f"StudyInstanceUID == '{patient_id}'"
+        df = self.df_annotations.query(query_string)
+        if len(df) == 0:
+            no_anno = 0
+        for i, row in df.iterrows():
+            label = row["label"]
+            data = np.array(ast.literal_eval(row["data"]))
+            for data_point in range(len(data)):
+                point_pairs = data[data_point: data_point + 2]
+                if len(point_pairs) < 2:
+                    continue
+                for d in interpolate_mask(point_pairs):
+                    image[d[1]-self.annot_size//2:d[1]+self.annot_size//2,
+                          d[0]-self.annot_size//2:d[0]+self.annot_size//2,
+                          :] = (255, 255, 255)
+        if self.transform:
+            augmented = self.transform(image=image)
+            image = augmented['image'].transpose(2, 0, 1)
 
-        if self.train: 
-            label = self.data.iloc[idx][self.target_cols].values
-            label = torch.from_numpy(label.astype(np.float32))
-            return image, label
+        if self.mode == 'test':
+            return torch.tensor(image).float()
         else:
-            return image
-           
+            label = torch.tensor(self.labels[idx]).float()
+            #no_anno = torch.tensor(no_anno)
+            return torch.tensor(image).float(), label #, no_anno.float() 
+
 ####################
 # Data Module
 ####################
@@ -191,6 +217,10 @@ class RANZCRDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         if stage == 'fit':
             df = pd.read_csv(os.path.join(self.conf.data_dir, "train.csv"))
+            df_ann = pd.read_csv(os.path.join(self.conf.data_dir, "train_annotations.csv"))
+            df['file_path'] = df.StudyInstanceUID.apply(lambda x: os.path.join(self.conf.data_dir, f'train/{x}.jpg'))
+            
+            df = df[df['StudyInstanceUID'].isin(df_ann['StudyInstanceUID'].unique())].reset_index(drop=True)
             
             label_arr = df[self.target_cols].values
             group_id = df['PatientID'].values
@@ -209,7 +239,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
-                        A.RandomBrightnessContrast(brightness_limit=(-0.4,0.4), contrast_limit=(-0.4, 0.4), p=0.8),
+                        A.RandomBrightnessContrast(brightness_limit=(-0.3,0.3), contrast_limit=(-0.3, 0.3), p=0.8),
                         A.CLAHE(clip_limit=(1,4), p=0.5),
                         A.OneOf([
                             A.OpticalDistortion(distort_limit=1.0),
@@ -238,8 +268,10 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
 
-            self.train_dataset = RANZCRDataset(train_df, os.path.join(self.conf.data_dir, 'train'), transform=train_transform)
-            self.valid_dataset = RANZCRDataset(valid_df, os.path.join(self.conf.data_dir, 'train'), transform=valid_transform)
+            #self.train_dataset = RANZCRDataset(train_df, os.path.join(self.conf.data_dir, 'train'), transform=train_transform)
+            self.train_dataset = RANZCRDataset(train_df, df_ann, annot_size=10, transform=train_transform, mode = 'train')
+            #self.valid_dataset = RANZCRDataset(valid_df, os.path.join(self.conf.data_dir, 'train'), transform=valid_transform)
+            self.valid_dataset = RANZCRDataset(valid_df, df_ann, annot_size=10, transform=valid_transform, mode = 'train')
             
         elif stage == 'test':
             test_df = pd.read_csv(os.path.join(self.conf.data_dir, "sample_submission.csv"))
@@ -247,7 +279,8 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.Resize(height=self.conf.image_size, width=self.conf.image_size, always_apply=False, p=1.0),
                         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0)
                         ])
-            self.test_dataset = RANZCRDataset(test_df, os.path.join(self.conf.data_dir, 'test'), transform=test_transform, train=False)
+            #self.test_dataset = RANZCRDataset(test_df, os.path.join(self.conf.data_dir, 'test'), transform=test_transform, train=False)
+            self.test_dataset = RANZCRDataset(test_df, df_ann, annot_size=10, transform=test_transform, mode = 'test')
          
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.conf.batch_size, num_workers=4, shuffle=True, pin_memory=True, drop_last=True)
@@ -278,7 +311,7 @@ class LitSystem(pl.LightningModule):
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.hparams.epoch*1.5))
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.hparams.epoch*1.2))
         
         return [optimizer], [scheduler]
 
