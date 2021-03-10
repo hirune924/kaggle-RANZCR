@@ -138,9 +138,9 @@ def load_pytorch_model(ckpt_name, model, ignore_suffix='model'):
 # Config
 ####################
 
-conf_dict = {'batch_size': 8,#32, 
+conf_dict = {'batch_size': 32, 
              'epoch': 30,
-             'image_size': 128,#640,
+             'image_size': 640,
              'model_name': 'tf_efficientnet_b5',
              'lr': 0.001,
              'fold': 0,
