@@ -353,8 +353,10 @@ class LitSystem(pl.LightningModule):
         
         with torch.no_grad():
             self.teacher_model.eval()
-            t_hat = torch.sigmoid(self.teacher_model(x)).detach()
-        t_loss = self.consistency_loss(t_hat, torch.sigmoid(y_hat))
+            #t_hat = torch.sigmoid(self.teacher_model(x)).detach()
+            t_hat = self.teacher_model(x).detach()
+        #t_loss = self.consistency_loss(t_hat, torch.sigmoid(y_hat))
+        t_loss = self.consistency_loss(t_hat, y_hat)
         
         loss = c_loss + t_loss * 0.5
         
