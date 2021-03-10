@@ -115,7 +115,7 @@ def multi_label_stratified_group_k_fold(label_arr: np.array, gid_arr: np.array, 
 
         yield train_indexs, val_indexs
 
- def load_pytorch_model(ckpt_name, model, ignore_suffix='model'):
+def load_pytorch_model(ckpt_name, model, ignore_suffix='model'):
     state_dict = torch.load(ckpt_name, map_location='cpu')["state_dict"]
     new_state_dict = {}
     for k, v in state_dict.items():
