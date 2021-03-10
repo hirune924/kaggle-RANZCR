@@ -115,6 +115,16 @@ def multi_label_stratified_group_k_fold(label_arr: np.array, gid_arr: np.array, 
 
         yield train_indexs, val_indexs
 
+ def load_pytorch_model(ckpt_name, model, ignore_suffix='model'):
+    state_dict = torch.load(ckpt_name, map_location='cpu')["state_dict"]
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        name = k
+        if name.startswith(str(ignore_suffix)+"."):
+            name = name.replace(str(ignore_suffix)+".", "", 1)  # remove `model.`
+        new_state_dict[name] = v
+    model.load_state_dict(new_state_dict)
+    return model
 ####################
 # Config
 ####################
@@ -125,6 +135,7 @@ conf_dict = {'batch_size': 32,
              'model_name': 'tf_efficientnet_b0',
              'lr': 0.001,
              'fold': 0,
+             'model_ckpt': '../input/ranzcr-models/22020073-effb5/22020073-effb5/epoch5-avg_val_loss0.15.ckpt',
              'data_dir': '../input/ranzcr-clip-catheter-line-classification',
              'output_dir': './',
              'trainer': {}}
@@ -209,7 +220,7 @@ class RANZCRDataModule(pl.LightningDataModule):
                         A.HorizontalFlip(p=0.5),
                         A.ShiftScaleRotate(p=0.5),
                         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.7),
-                        A.RandomBrightnessContrast(brightness_limit=(-0.4,0.4), contrast_limit=(-0.4, 0.4), p=0.8),
+                        A.RandomBrightnessContrast(brightness_limit=(-0.3,0.3), contrast_limit=(-0.3, 0.3), p=0.8),
                         A.CLAHE(clip_limit=(1,4), p=0.5),
                         A.OneOf([
                             A.OpticalDistortion(distort_limit=1.0),
@@ -267,7 +278,8 @@ class LitSystem(pl.LightningModule):
         super().__init__()
         #self.conf = conf
         self.save_hyperparameters(conf)
-        self.model = timm.create_model(model_name=self.hparams.model_name, num_classes=11, pretrained=True, in_chans=3)
+        self.model = timm.create_model(model_name=self.hparams.model_name, num_classes=11, pretrained=False, in_chans=3)
+        self.model = load_pytorch_model(self.hparams.model_ckpt, self.model)
         self.criteria = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, x):
@@ -278,7 +290,7 @@ class LitSystem(pl.LightningModule):
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.hparams.epoch*1.5))
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.hparams.epoch*1.2))
         
         return [optimizer], [scheduler]
 
