@@ -24,6 +24,7 @@ import timm
 from omegaconf import OmegaConf
 
 from sklearn.metrics import roc_auc_score
+from pytorch_lightning.plugins import DDPPlugin
 ####################
 # Utils
 ####################
@@ -416,6 +417,7 @@ def main():
         precision=16,
         num_sanity_val_steps=100,
         val_check_interval=1.0,
+        plugins=DDPPlugin(find_unused_parameters=True),
         **conf.trainer
             )
 
