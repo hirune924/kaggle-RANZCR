@@ -24,6 +24,7 @@ import timm
 from omegaconf import OmegaConf
 
 from sklearn.metrics import roc_auc_score
+from pytorch_lightning.plugins import DDPPlugin
 ####################
 # Utils
 ####################
@@ -331,8 +332,8 @@ class LitSystem(pl.LightningModule):
 
         val_score, _ = get_score(y, y_hat)
 
-        self.log('avg_val_loss', avg_val_loss)
-        self.log('val_score', val_score)
+        self.log('avg_val_loss', torch.mean(self.all_gather(avg_val_loss)))
+        self.log('val_score', torch.mean(self.all_gather(val_score)))
         
         
 ####################
@@ -366,6 +367,7 @@ def main():
         precision=16,
         num_sanity_val_steps=0,
         val_check_interval=1.0,
+        plugins=DDPPlugin(find_unused_parameters=True),
         **conf.trainer
             )
 
